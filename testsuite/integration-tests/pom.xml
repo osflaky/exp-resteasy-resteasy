@@ -1,0 +1,843 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.jboss.resteasy</groupId>
+        <artifactId>resteasy-testsuite</artifactId>
+        <version>8.0.0.Alpha1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <properties>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+        <container.base.dir.managed>${project.build.directory}${file.separator}${container.qualifier.managed}</container.base.dir.managed>
+        <container.base.dir.managed.encoding>${project.build.directory}${file.separator}${container.qualifier.managed.encoding}</container.base.dir.managed.encoding>
+        <container.offset.managed>0</container.offset.managed>
+        <container.offset.managed.encoding>7000</container.offset.managed.encoding>
+        <container.management.port.managed>9990</container.management.port.managed><!-- keep in sync with port offset -->
+        <container.management.port.managed.encoding>16990</container.management.port.managed.encoding><!-- keep in sync with port offset -->
+        <container.qualifier.managed>jbossas-managed</container.qualifier.managed>
+        <container.qualifier.managed.encoding>jbossas-managed-encoding</container.qualifier.managed.encoding>
+
+        <module.jar.path>${jboss.home}${file.separator}modules${file.separator}system${file.separator}layers${file.separator}base</module.jar.path>
+
+        <version.org.jboss.shrinkwrap.resolver>3.3.0</version.org.jboss.shrinkwrap.resolver>
+        <!-- Exclude additional tests with e.g. -Dresteasy-integration-tests.additional.surefire.excludes='%regex[.*JettyClientHttpEngineTest.*|.*VertxClientHttpEngineTest.*]' -->
+        <resteasy-integration-tests.additional.surefire.excludes />
+
+        <!-- Skip deploying tests -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <central.skipPublishing>${maven.deploy.skip}</central.skipPublishing>
+
+        <configure-test-server.phase>process-test-resources</configure-test-server.phase>
+    </properties>
+
+    <artifactId>resteasy-integration-tests</artifactId>
+    <name>RESTEasy Main testsuite: Integration tests</name>
+
+    <profiles>
+        <!--
+        Name:  download
+        Descr: Download WildFly
+        -->
+        <profile>
+          <id>download</id>
+          <activation>
+            <property>
+              <name>!server.home</name>
+            </property>
+          </activation>
+          <properties>
+              <jboss.home>${project.build.directory}${file.separator}wildfly</jboss.home>
+          </properties>
+          <build>
+            <plugins>
+                <plugin>
+                    <groupId>org.wildfly.plugins</groupId>
+                    <artifactId>wildfly-maven-plugin</artifactId>
+                    <configuration>
+                        <system-properties>
+                            <maven.repo.local>${settings.localRepository}</maven.repo.local>
+                        </system-properties>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>server-provisioning</id>
+                            <phase>generate-test-resources</phase>
+                            <goals>
+                                <goal>provision</goal>
+                            </goals>
+                            <configuration>
+                                <feature-packs>
+                                    <feature-pack>
+                                        <groupId>${server.test.feature.pack.groupId}</groupId>
+                                        <artifactId>${server.test.feature.pack.artifactId}</artifactId>
+                                        <version>${server.version}</version>
+                                        <inherit-configs>false</inherit-configs>
+                                        <included-configs>
+                                            <config>
+                                                <model>standalone</model>
+                                                <name>standalone-full.xml</name>
+                                            </config>
+                                            <config>
+                                                <model>standalone</model>
+                                                <name>standalone.xml</name>
+                                            </config>
+                                        </included-configs>
+                                        <excluded-packages>
+                                            <name>docs.schema</name>
+                                            <name>appclient</name>
+                                            <name>domain</name>
+                                        </excluded-packages>
+                                    </feature-pack>
+                                </feature-packs>
+                                <channels>
+                                    <!-- If the server.version is blank the newest version of WildFly will be used. Otherwise, be
+                                         explicit.
+                                     -->
+                                    <channel>
+                                        <manifest>
+                                            <groupId>${wildfly.channel.manifest.groupId}</groupId>
+                                            <artifactId>${wildfly.channel.manifest.artifactId}</artifactId>
+                                            <version>${server.version}</version>
+                                        </manifest>
+                                    </channel>
+                                    <channel>
+                                        <manifest>
+                                            <groupId>${resteasy.channel.manifest.groupId}</groupId>
+                                            <artifactId>${resteasy.channel.manifest.artifactId}</artifactId>
+                                            <version>${resteasy.channel.manifest.version}</version>
+                                        </manifest>
+                                    </channel>
+                                </channels>
+                                <galleon-options>
+                                    <jboss-maven-dist />
+                                </galleon-options>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+          </build>
+        </profile>
+        <profile>
+            <id>provision-without-resteasy</id>
+            <properties>
+                <jboss.home>${project.build.directory}${file.separator}wildfly</jboss.home>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.wildfly.plugins</groupId>
+                        <artifactId>wildfly-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>server-provisioning</id>
+                                <phase>generate-test-resources</phase>
+                                <goals>
+                                    <goal>provision</goal>
+                                </goals>
+                                <configuration>
+                                    <channels>
+                                        <!-- Always use the latest version of the WildFly channel -->
+                                        <channel>
+                                            <manifest>
+                                                <groupId>${wildfly.channel.manifest.groupId}</groupId>
+                                                <artifactId>${wildfly.channel.manifest.artifactId}</artifactId>
+                                            </manifest>
+                                        </channel>
+                                    </channels>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>without-jackson</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <!-- default test execution -->
+                            <execution>
+                                <id>default-test</id>
+                                <phase>test</phase>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <excludes>
+                                        <!-- Tests requires excluding JsonBindingProvider-->
+                                        <exclude>**/JaxbXmlRootElementProviderTest.java</exclude>
+                                        <exclude>**/JsonBindingAnnotationsJacksonTest.java</exclude>
+                                        <exclude>**/SseJsonEventTest</exclude>
+                                        <!-- The CustomJackson2Provider doesn't work with this if the full project is not built. -->
+                                        <exclude>**/CustomJackson2ProviderTest.java</exclude>
+                                        <exclude>${resteasy-integration-tests.additional.surefire.excludes}</exclude>
+                                    </excludes>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>default</id>
+            <activation>
+                <property>
+                    <name>!ts.bootable</name>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.wildfly.arquillian</groupId>
+                    <artifactId>wildfly-arquillian-container-managed</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>bootablejar.profile</id>
+            <activation>
+                <property>
+                    <name>ts.bootable</name>
+                </property>
+            </activation>
+            <properties>
+                <!-- Disable configure-test-server for bootable JAR tests -->
+                <configure-test-server.phase>none</configure-test-server.phase>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.wildfly.arquillian</groupId>
+                    <artifactId>wildfly-arquillian-container-bootable</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <!-- Disable the standard copy-based provisioning -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>initialize-basedirs</id>
+                                <phase>none</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Provisions WildFly for bootable JAR tests -->
+                    <plugin>
+                        <groupId>${groupId.org.wildfly.plugins.wildfly-maven-plugin.bootable-jar}</groupId>
+                        <artifactId>${artifactId.org.wildfly.plugins.wildfly-maven-plugin.bootable-jar}</artifactId>
+                        <version>${version.org.wildfly.plugins.wildfly-maven-plugin.bootable-jar}</version>
+                        <executions>
+                            <!-- Package a jaxrs-server layer with a few other layers to be tested as a bootable jar -->
+                            <execution>
+                                <id>bootable-jar-observability-packaging</id>
+                                <goals>
+                                    <goal>package</goal>
+                                </goals>
+                                <phase>process-test-resources</phase>
+                                <configuration>
+                                    <provisioning-dir>${project.build.directory}/server</provisioning-dir>
+                                    <bootable-jar-name>jaxrs-server.jar</bootable-jar-name>
+                                    <skipDeployment>true</skipDeployment>
+                                    <record-provisioning-state>false</record-provisioning-state>
+                                    <log-provisioning-time>true</log-provisioning-time>
+                                    <galleon-options>
+                                        <jboss-fork-embedded>true</jboss-fork-embedded>
+                                    </galleon-options>
+                                    <feature-packs>
+                                        <feature-pack>
+                                            <groupId>${server.test.feature.pack.groupId}</groupId>
+                                            <artifactId>${server.test.feature.pack.artifactId}</artifactId>
+                                            <version>${server.version}</version>
+                                            <!-- Required for rxjava -->
+                                            <includedPackages>
+                                                <package>org.jboss.resteasy.resteasy-rxjava2</package>
+                                            </includedPackages>
+                                        </feature-pack>
+                                    </feature-packs>
+                                    <layers>
+                                        <layer>jaxrs-server</layer>
+                                        <layer>datasources</layer>
+                                        <layer>h2-default-datasource</layer>
+                                        <layer>undertow-https</layer>
+                                        <layer>ejb</layer>
+                                    </layers>
+                                    <channels>
+                                        <channel>
+                                            <manifest>
+                                                <groupId>${wildfly.channel.manifest.groupId}</groupId>
+                                                <artifactId>${wildfly.channel.manifest.artifactId}</artifactId>
+                                                <version>${wildfly.channel.manifest.version}</version>
+                                            </manifest>
+                                        </channel>
+                                    </channels>
+                                    <packaging-scripts>
+                                        <execution>
+                                            <scripts>
+                                                <script>${basedir}/../config/configure-bootable-jar.cli</script>
+                                            </scripts>
+                                        </execution>
+                                    </packaging-scripts>
+                                    <bootable-jar>true</bootable-jar>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables combine.children="append">
+                                <install.dir>${project.build.directory}/wildfly</install.dir>
+                                <bootable.jar>${project.build.directory}/jaxrs-server.jar</bootable.jar>
+                                <arquillian.xml>arquillian-bootable.xml</arquillian.xml>
+                            </systemPropertyVariables>
+                            <excludedGroups>${additional.surefire.excluded.groups}</excludedGroups>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>default-test</id>
+                                <phase>none</phase>
+                            </execution>
+                            <execution>
+                                <id>disable-jsonb-client</id>
+                                <phase>none</phase>
+                            </execution>
+
+                            <execution>
+                                <id>default-test-bootable-jar</id>
+                                <phase>test</phase>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <excludes>
+                                        <!-- Tests requires excluding JsonBindingProvider-->
+                                        <exclude>**/JsonBindingAnnotationsJacksonTest.java</exclude>
+                                        <exclude>**/SseJsonEventTest</exclude>
+                                        <!-- Tests without proper arquillian container in arquillian-bootable.xml -->
+                                        <exclude>**/*Gzip*</exclude>
+                                        <exclude>**/SslServerWithCorrectCertificateTest.java</exclude>
+                                        <exclude>**/SslServerWithWildcardHostnameCertificateTest.java</exclude>
+                                        <exclude>**/SslServerWithWrongHostnameCertificateTest.java</exclude>
+                                        <exclude>**/SslSniHostNamesTest.java</exclude>
+                                        <exclude>${resteasy-integration-tests.additional.surefire.excludes}</exclude>
+                                    </excludes>
+                                </configuration>
+                            </execution>
+
+                            <!-- execution with excluded JSON-B -->
+                            <execution>
+                                <id>disable-jsonb-client-bootable-jar</id>
+                                <phase>test</phase>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <includes>
+                                        <!-- TODO JsonBindingAnnotationsJacksonTest may be included here as well with additional changes-->
+                                        <include>**/SseJsonEventTest.java</include>
+                                    </includes>
+                                    <classpathDependencyExcludes>
+                                        <classpathDependencyExclude>org.jboss.resteasy:resteasy-json-binding-provider</classpathDependencyExclude>
+                                    </classpathDependencyExcludes>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>enhanced-cdi-disabled</id>
+            <activation>
+                <property>
+                    <name>enhanced.cdi.disabled</name>
+                </property>
+            </activation>
+            <properties>
+                <wildfly.system.properties>-Ddev.resteasy.cdi.enhanced.enabled=false</wildfly.system.properties>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <wildfly.system.properties>${wildfly.system.properties}</wildfly.system.properties>
+                                <dev.resteasy.cdi.enhanced.enabled>false</dev.resteasy.cdi.enhanced.enabled>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap.resolver</groupId>
+            <artifactId>shrinkwrap-resolver-depchain</artifactId>
+            <scope>test</scope>
+            <type>pom</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>javax.inject</groupId>
+                    <artifactId>javax.inject</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.hamcrest</groupId>
+                    <artifactId>hamcrest-core</artifactId>
+                </exclusion>
+            </exclusions>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>arquillian-utils</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-core-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-jaxb-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-stats</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-client-utils</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-validator-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-multipart-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-jackson2-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-json-p-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-json-binding-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-atom-provider</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-cdi</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-crypto</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-wadl</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-wadl-undertow-connector</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jboss.resteasy</groupId>
+                    <artifactId>resteasy-undertow</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-html</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-tracing-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.ejb</groupId>
+            <artifactId>jakarta.ejb-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.enterprise.concurrent</groupId>
+            <artifactId>jakarta.enterprise.concurrent-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.jms</groupId>
+            <artifactId>jakarta.jms-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.el</groupId>
+            <artifactId>jakarta.el-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpasyncclient</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.reactivex.rxjava2</groupId>
+            <artifactId>rxjava</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-rxjava2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Used as a slf4j binder -->
+        <dependency>
+            <groupId>org.jboss.slf4j</groupId>
+            <artifactId>slf4j-jboss-logmanager</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            WildFly and WildFly Arquillian both require this newer version of JBoss Logging. RESTEasy still uses
+            the older version for backwards compatibility issues. For now, we will need override the dependency for
+            the test suite.
+        -->
+        <dependency>
+            <groupId>org.jboss.logging</groupId>
+            <artifactId>jboss-logging</artifactId>
+            <version>3.6.3.Final</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.junit5</groupId>
+            <artifactId>arquillian-junit5-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.arquillian</groupId>
+            <artifactId>wildfly-arquillian-junit-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.arquillian</groupId>
+            <artifactId>wildfly-testing-tools</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>arquillian.xml</include>
+                    <include>arquillian-bootable.xml</include>
+                </includes>
+            </testResource>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <excludes>
+                    <exclude>arquillian.xml</exclude>
+                    <exclude>arquillian-bootable.xml</exclude>
+                </excludes>
+            </testResource>
+        </testResources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <configuration>
+                    <skip>${skipTests}</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>initialize-basedirs</id>
+                        <phase>process-test-classes</phase>
+                        <configuration>
+                            <target>
+                                <!-- Initialize basedir for tested container by copying
+                                     the original into new place.
+                                     This helps to isolate the multiple running instances.
+                                     One copy per each container in arquillian.xml -->
+
+                                <delete quiet="true" dir="${container.base.dir.managed}" />
+                                <copy todir="${container.base.dir.managed}" overwrite="true" failonerror="true">
+                                    <fileset dir="${jboss.home}/standalone" />
+                                </copy>
+
+                                <delete quiet="true" dir="${container.base.dir.managed.encoding}" />
+                                <copy todir="${container.base.dir.managed.encoding}" overwrite="true" failonerror="true">
+                                    <fileset dir="${jboss.home}/standalone" />
+                                </copy>
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.wildfly.plugins</groupId>
+                <artifactId>wildfly-maven-plugin</artifactId>
+                <configuration>
+                    <provisioning-dir>${jboss.home}</provisioning-dir>
+                    <skip>${wildfly.skip}</skip>
+                    <offline>${galleon.offline}</offline>
+                    <galleon-options>
+                        <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
+                    </galleon-options>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>configure-test-server</id>
+                        <phase>${configure-test-server.phase}</phase>
+                        <goals>
+                            <goal>execute-commands</goal>
+                        </goals>
+                        <configuration>
+                            <jboss-home>${jboss.home}</jboss-home>
+                            <offline>true</offline>
+                            <scripts>
+                                <script>${basedir}/../config/configure-test-server.cli</script>
+                            </scripts>
+                            <stdout>${project.build.directory}/configure-test-server.out</stdout>
+                            <system-properties>
+                                <jboss.server.config.file.name>${jboss.server.config.file.name}</jboss.server.config.file.name>
+                            </system-properties>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <environmentVariables>
+                        <TEST_ENV_VAR>test-env-value</TEST_ENV_VAR>
+                    </environmentVariables>
+                    <systemPropertyVariables>
+                        <module.jar.path>${module.jar.path}</module.jar.path>
+                    </systemPropertyVariables>
+                </configuration>
+                    <executions>
+
+                        <!-- Re-evaluate https://issues.jboss.org/browse/RESTEASY-1884 in case we find ourselves
+                             in need of adding additional execution. -->
+
+                        <!-- default test execution -->
+                        <execution>
+                            <id>default-test</id>
+                            <phase>test</phase>
+                            <goals>
+                                <goal>test</goal>
+                            </goals>
+                            <configuration>
+                                <excludes>
+                                    <!-- Tests requires excluding JsonBindingProvider-->
+                                    <exclude>**/JaxbXmlRootElementProviderTest.java</exclude>
+                                    <exclude>**/JsonBindingAnnotationsJacksonTest.java</exclude>
+                                    <exclude>**/SseJsonEventTest</exclude>
+                                    <exclude>${resteasy-integration-tests.additional.surefire.excludes}</exclude>
+                                </excludes>
+                            </configuration>
+                        </execution>
+
+
+                        <!-- execution with excluded JSON-B -->
+                        <execution>
+                            <id>disable-jsonb-client</id>
+                            <phase>test</phase>
+                            <goals>
+                                <goal>test</goal>
+                            </goals>
+                            <configuration>
+                                <includes>
+                                    <include>**/JaxbXmlRootElementProviderTest.java</include>
+                                    <include>**/JsonBindingAnnotationsJacksonTest.java</include>
+                                    <include>**/SseJsonEventTest.java</include>
+                                    <include>**/ValidationJaxbTest.java</include>
+                                </includes>
+                                <classpathDependencyExcludes>
+                                    <classpathDependencyExclude>org.jboss.resteasy:resteasy-json-binding-provider</classpathDependencyExclude>
+                                </classpathDependencyExcludes>
+
+                            </configuration>
+                        </execution>
+
+                    </executions>
+            </plugin>
+
+            <!-- generate archive needed by project resteasy-quarkus-testsuite -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <descriptors>
+                        <descriptor>assembly/assembly.xml</descriptor>
+                    </descriptors>
+                    <finalName>resteasy-integration-tests-${project.version}-sources</finalName>
+                    <appendAssemblyId>false</appendAssemblyId>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>trigger-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <configuration>
+                    <groupId>org.jboss.resteasy</groupId>
+                    <artifactId>resteasy-integration-tests</artifactId>
+                    <version>${project.version}</version>
+                    <packaging>zip</packaging>
+                    <classifier>sources</classifier>
+                    <file>${project.build.directory}/resteasy-integration-tests-${project.version}-sources.zip</file>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-assembly-zip</id>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <phase>install</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

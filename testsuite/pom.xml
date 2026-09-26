@@ -1,0 +1,443 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <parent>
+        <groupId>org.jboss.resteasy</groupId>
+        <artifactId>resteasy-jaxrs-all</artifactId>
+        <version>8.0.0.Alpha1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <name>RESTEasy Main testsuite</name>
+    <modelVersion>4.0.0</modelVersion>
+    <packaging>pom</packaging>
+
+    <artifactId>resteasy-testsuite</artifactId>
+
+    <properties>
+        <version.resteasy.testsuite>8.0.0.Alpha1-SNAPSHOT</version.resteasy.testsuite>
+        <!-- Currently WildFly Preview does not include MBean support as it was removed from Jakarta EE 11 -->
+        <additional.surefire.excluded.groups>managed-bean-support-required</additional.surefire.excluded.groups>
+        <jacoco.agent />
+        <ipv6ArquillianSettings />
+        <debugJvmArgs />
+        <jboss.server.config.file.name>standalone-full.xml</jboss.server.config.file.name>
+        <test.java.home>${java.home}</test.java.home>
+
+        <!-- Test dependency versions -->
+        <version.org.jboss.shrinkwrap>1.2.6</version.org.jboss.shrinkwrap>
+        <version.org.jboss.shrinkwrap.resolver>3.3.7</version.org.jboss.shrinkwrap.resolver>
+        <version.org.jboss.slf4j.slf4j-jboss-logmanager>2.1.0.Final</version.org.jboss.slf4j.slf4j-jboss-logmanager>
+        <version.org.wildfly.cloud-tests>1.0.0.Alpha2</version.org.wildfly.cloud-tests>
+
+        <!-- Provisioning properties -->
+        <server.version />
+
+        <server.test.feature.pack.groupId>org.wildfly</server.test.feature.pack.groupId>
+        <server.test.feature.pack.artifactId>wildfly-ee-galleon-pack</server.test.feature.pack.artifactId>
+
+        <wildfly.channel.manifest.groupId>org.wildfly.channels</wildfly.channel.manifest.groupId>
+        <wildfly.channel.manifest.artifactId>wildfly-ee</wildfly.channel.manifest.artifactId>
+        <wildfly.channel.manifest.version>${server.version}</wildfly.channel.manifest.version>
+
+
+        <resteasy.channel.manifest.groupId>org.jboss.resteasy.channels</resteasy.channel.manifest.groupId>
+        <resteasy.channel.manifest.artifactId>resteasy-${channel.stream.version}</resteasy.channel.manifest.artifactId>
+        <resteasy.channel.manifest.version>${project.version}</resteasy.channel.manifest.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- This is required first to ensure these dependencies are used -->
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-dependencies</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- This is required next to override the dependencies in the Arquillian BOM -->
+            <dependency>
+                <groupId>org.jboss.shrinkwrap.resolver</groupId>
+                <artifactId>shrinkwrap-resolver-bom</artifactId>
+                <version>${version.org.jboss.shrinkwrap.resolver}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.shrinkwrap</groupId>
+                <artifactId>shrinkwrap-bom</artifactId>
+                <version>${version.org.jboss.shrinkwrap}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${version.org.jboss.arquillian.core}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.jakarta</groupId>
+                <artifactId>arquillian-jakarta-bom</artifactId>
+                <version>${version.org.jboss.arquillian.jakarta}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.wildfly.arquillian</groupId>
+                <artifactId>wildfly-arquillian-bom</artifactId>
+                <version>${version.org.wildfly.arquillian.wildfly-arquillian}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-weld-embedded</artifactId>
+                <version>${version.org.jboss.arquillian.container.arquillian-weld-embedded}</version>
+            </dependency>
+            <!-- Import the RESTEasy BOM for testing -->
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-bom</artifactId>
+                <version>${version.resteasy.testsuite}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Placed here to be resolved for other sub-modules -->
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>arquillian-utils</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- Used for surefire logging -->
+            <dependency>
+                <groupId>org.jboss.slf4j</groupId>
+                <artifactId>slf4j-jboss-logmanager</artifactId>
+                <version>${version.org.jboss.slf4j.slf4j-jboss-logmanager}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <jvm>${test.java.home}/bin/java</jvm>
+                    <failIfNoTests>false</failIfNoTests>
+                    <systemPropertyVariables>
+                        <additionalJvmArgs>${additionalJvmArgs}</additionalJvmArgs>
+                        <ipv6>false</ipv6>
+                        <ipv6ArquillianSettings />
+                        <node>127.0.0.1</node>
+                        <jboss.home>${jboss.home}</jboss.home>
+                        <project.version>${project.version}</project.version>
+                        <version.resteasy.testsuite>${version.resteasy.testsuite}</version.resteasy.testsuite>
+                        <jboss.server.config.file.name>${jboss.server.config.file.name}</jboss.server.config.file.name>
+                    </systemPropertyVariables>
+                    <excludedGroups>${additional.surefire.excluded.groups}</excludedGroups>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${version.enforcer.plugin}</version>
+                <executions>
+                    <execution>
+                        <id>dep-convergence</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.wildfly.plugins</groupId>
+                <artifactId>wildfly-maven-plugin</artifactId>
+                <configuration>
+                    <skip>${wildfly.skip}</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>default</id>
+            <activation>
+                <property>
+                    <name>!skipDefaultProfile</name>
+                </property>
+            </activation>
+            <modules>
+                <module>arquillian-utils</module>
+                <module>unit-tests</module>
+                <module>integration-tests</module>
+                <module>jetty-integration-tests</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>provision-preview</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+                <!-- WildFly Preview is currently targeting Jakarta EE 11 and we should use it by default
+                <property>
+                    <name>provision.preview</name>
+                </property> -->
+            </activation>
+            <properties>
+                <server.test.feature.pack.artifactId>wildfly-preview-feature-pack</server.test.feature.pack.artifactId>
+                <wildfly.channel.manifest.artifactId>wildfly-preview</wildfly.channel.manifest.artifactId>
+            </properties>
+        </profile>
+        <profile>
+            <id>cloud-tests</id>
+            <activation>
+                <property>
+                    <name>cloud.tests</name>
+                </property>
+            </activation>
+            <modules>
+                <module>cloud-tests</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>home</id>
+            <activation>
+                <property>
+                    <name>!jboss.home</name>
+                </property>
+            </activation>
+            <properties>
+                <jboss.home>${server.home}</jboss.home>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>ipv6</id>
+            <activation>
+                <property>
+                    <name>ipv6</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <testFailureIgnore>true</testFailureIgnore>
+                            <systemPropertyVariables>
+                                <additionalJvmArgs>${additionalJvmArgs}</additionalJvmArgs>
+                                <ipv6>true</ipv6>
+                                <ipv6ArquillianSettings>-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true</ipv6ArquillianSettings>
+                                <node>::1</node>
+                                <project.version>${project.version}</project.version>
+                                <version.resteasy.testsuite>${version.resteasy.testsuite}</version.resteasy.testsuite>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+
+                </plugins>
+            </build>
+        </profile>
+        <!-- This profile generates jacoco coverage files. To generate html report use "-Djacoco.generate.report" -->
+        <profile>
+            <id>jacoco</id>
+            <activation>
+                <property>
+                    <name>jacoco</name>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>org.jacoco.core</artifactId>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                     <plugin>
+                         <groupId>org.jacoco</groupId>
+                         <artifactId>jacoco-maven-plugin</artifactId>
+                         <executions>
+                             <execution>
+                                 <id>jacoco-prepare</id>
+                                 <phase>validate</phase>
+                                 <goals>
+                                     <goal>prepare-agent</goal>
+                                 </goals>
+                                 <configuration>
+                                     <destFile>${project.build.directory}/jacoco.exec</destFile>
+                                     <!-- Jacoco sets this property with agent configuration.
+                                     This property is passed to maven-surefire-plugin -->
+                                     <propertyName>surefireArgLine</propertyName>
+                                 </configuration>
+                             </execution>
+                             <execution>
+                                 <id>jacoco-prepare-it</id>
+                                 <phase>validate</phase>
+                                 <goals>
+                                     <goal>prepare-agent-integration</goal>
+                                 </goals>
+                                 <configuration>
+                                     <destFile>${project.build.directory}/jacoco.exec</destFile>
+                                     <!-- Jacoco sets this property with agent configuration.
+                                     This property is passed to maven-surefire-plugin as system property variable jacoco.agent.
+                                     jacoco.agent property is passed to arquillian.xml -->
+                                     <propertyName>jacoco.agent</propertyName>
+                                 </configuration>
+                             </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>${surefireArgLine}</argLine>
+                            <skipTests>false</skipTests>
+                            <systemPropertyVariables>
+                                <jacoco.agent>@{jacoco.agent}</jacoco.agent>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- This profile generates html report from jacoco coverage files. Use "-Djacoco" property to generate coverage. -->
+        <profile>
+            <id>jacoco-generate-report</id>
+            <activation>
+                <property>
+                    <name>jacoco.generate.report</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <executions>
+                            <!-- Copy jacoco ant jar. This is needed to generate jacoco report with maven-antrun-plugin -->
+                            <execution>
+                                <goals>
+                                    <goal>copy</goal>
+                                </goals>
+                                <phase>process-test-resources</phase>
+                                <inherited>false</inherited>
+                                <configuration>
+                                    <artifactItems>
+                                        <artifactItem>
+                                            <groupId>org.jacoco</groupId>
+                                            <artifactId>org.jacoco.ant</artifactId>
+                                            <version>${version.org.jacoco.plugin}</version></artifactItem>
+                                    </artifactItems>
+                                    <stripVersion>true</stripVersion>
+                                    <outputDirectory>${project.build.directory}/jacoco-jars</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <phase>post-integration-test</phase>
+                                <goals><goal>run</goal></goals>
+                                <inherited>false</inherited>
+                                <configuration>
+                                    <skip>${skipTests}</skip>
+                                    <target>
+                                        <property name="result.report.dir" location="target/jacoco-report" />
+                                        <taskdef name="report" classname="org.jacoco.ant.ReportTask">
+                                            <classpath path="${project.build.directory}/jacoco-jars/org.jacoco.ant.jar" />
+                                        </taskdef>
+                                        <echo>Creating JaCoCo RESTEasy test coverage reports...</echo>
+                                        <report>
+                                            <executiondata>
+                                                <fileset dir="${basedir}">
+                                                    <include name="**/target/jacoco.exec" />
+                                                </fileset>
+                                            </executiondata>
+                                            <structure name="JaCoCo RESTEasy">
+                                                <classfiles>
+                                                    <fileset dir="${basedir}/integration-tests/target/test-server">
+                                                        <include name="**/resteasy*${project.version}.jar" />
+                                                        <include name="**/jose-jwt*${project.version}.jar" />
+                                                        <include name="**/async-http-servlet*.jar" />
+                                                        <include name="**/jboss-jaxrs-api*.jar" />
+                                                        <include name="**/jackson-jaxrs*.jar" />
+                                                        <include name="**/jackson-module*.jar" />
+                                                        <include name="**/wildfly-jaxrs*.jar" />
+                                                    </fileset>
+                                                </classfiles>
+                                                <sourcefiles encoding="UTF-8">
+                                                    <dirset dir="${basedir}/..">
+                                                        <include name="**/src/main/java" />
+                                                    </dirset>
+                                                </sourcefiles>
+                                            </structure>
+                                            <html destdir="\${result.report.dir}" />
+                                            <xml destfile="\${result.report.dir}/report.xml" />
+                                        </report>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.jacoco</groupId>
+                                <artifactId>org.jacoco.ant</artifactId>
+                                <version>${version.org.jacoco.plugin}</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>debug</id>
+            <activation>
+                <property>
+                    <name>debug</name>
+                </property>
+            </activation>
+            <properties>
+                <debug.port>8787</debug.port>
+                <debugJvmArgs>-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:${debug.port}</debugJvmArgs>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>skip-wildfly-provisioning</id>
+            <activation>
+                <property>
+                    <name>skip.provisioning</name>
+                </property>
+            </activation>
+            <properties>
+                <wildfly.skip>true</wildfly.skip>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>bootablejar.profile</id>
+            <activation>
+                <property>
+                    <name>ts.bootable</name>
+                </property>
+            </activation>
+            <properties>
+                <additional.surefire.excluded.groups>NotForBootableJar,managed-bean-support-required</additional.surefire.excluded.groups>
+            </properties>
+            <modules>
+                <module>arquillian-utils</module>
+                <module>integration-tests</module>
+            </modules>
+        </profile>
+    </profiles>
+
+</project>
+

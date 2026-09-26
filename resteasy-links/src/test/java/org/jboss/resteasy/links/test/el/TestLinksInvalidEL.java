@@ -1,0 +1,52 @@
+package org.jboss.resteasy.links.test.el;
+
+import jakarta.ws.rs.InternalServerErrorException;
+
+import org.jboss.logging.Logger;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+import org.jboss.resteasy.links.test.BookStoreService;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import dev.resteasy.junit.extension.annotations.RestBootstrap;
+import dev.resteasy.junit.extension.annotations.RestResource;
+
+@RestBootstrap(BookStoreInvalidEL.class)
+public class TestLinksInvalidEL {
+
+    private static final Logger LOG = Logger.getLogger(TestLinksInvalidEL.class);
+
+    private BookStoreService client;
+
+    @BeforeEach
+    public void before(@RestResource ResteasyWebTarget webTarget) {
+        client = webTarget.proxy(BookStoreService.class);
+    }
+
+    @Test
+    public void testELWorksWithoutPackageXML() throws Exception {
+        try {
+            client.getBookXML("foo");
+            Assertions.fail("This should have caused a 500");
+        } catch (InternalServerErrorException x) {
+            LOG.error("Failure is " + x.getResponse().readEntity(String.class));
+            Assertions.assertEquals(500, x.getResponse().getStatus());
+        } catch (Exception x) {
+            Assertions.fail("Expected InternalServerErrorException");
+        }
+    }
+
+    @Test
+    public void testELWorksWithoutPackageJSON() throws Exception {
+        try {
+            client.getBookJSON("foo");
+            Assertions.fail("This should have caused a 500");
+        } catch (InternalServerErrorException x) {
+            LOG.error("Failure is " + x.getResponse().readEntity(String.class));
+            Assertions.assertEquals(500, x.getResponse().getStatus());
+        } catch (Exception x) {
+            Assertions.fail("Expected InternalServerErrorException");
+        }
+    }
+}

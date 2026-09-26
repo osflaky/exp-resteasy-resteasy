@@ -1,0 +1,90 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.jboss.resteasy</groupId>
+        <artifactId>resteasy-jaxrs-all</artifactId>
+        <version>8.0.0.Alpha1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>resteasy-reference-guide</artifactId>
+    <packaging>pom</packaging>
+    <name>RESTEasy Reference Guide</name>
+    <description>The RESTEasy documentation</description>
+
+    <properties>
+        <!-- Skip deploying tests -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <central.skipPublishing>${maven.deploy.skip}</central.skipPublishing>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-site-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.asciidoctor</groupId>
+                <artifactId>asciidoctor-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.asciidoctor</groupId>
+                        <artifactId>asciidoctorj-pdf</artifactId>
+                        <version>2.3.27</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <attributes>
+                        <!-- Attributes to use in the asciidoc source files. Please leave in alphabetical order -->
+                        <channel-stream-version>${channel.stream.version}</channel-stream-version>
+                        <resteasy-version>${project.version}</resteasy-version>
+
+                        <linkcss>false</linkcss>
+                    </attributes>
+                    <!-- We only want to process the index as it includes the other documents -->
+                    <sourceDocumentName>index.adoc</sourceDocumentName>
+                    <resources>
+                        <resource>
+                            <directory>${project.basedir}/src/main/asciidoc/images</directory>
+                            <targetPath>images</targetPath>
+                        </resource>
+                    </resources>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>output-html</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>process-asciidoc</goal>
+                        </goals>
+                        <configuration>
+                            <backend>html5</backend>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>output-pdf</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>process-asciidoc</goal>
+                        </goals>
+                        <configuration>
+                            <attributes>
+                                <title>RESTEasy</title>
+                            </attributes>
+                            <backend>pdf</backend>
+                            <!-- Rename the PDF -->
+                            <outputFile>resteasy-reference-guide.pdf</outputFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+
+</project>

@@ -1,0 +1,238 @@
+package org.jboss.resteasy.test.core.spi;
+
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.core.Response;
+
+import org.jboss.arquillian.container.test.api.Deployment;
+import org.jboss.arquillian.container.test.api.RunAsClient;
+import org.jboss.arquillian.junit5.ArquillianExtension;
+import org.jboss.logging.Logger;
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.spi.HttpResponseCodes;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorClass;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorEndPoint;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorEndPointCDI;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorEndPointEJB;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorImplementation;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorMethod;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorProxy;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorProxyEndPoint;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorPureEndPoint;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorPureEndPointCDI;
+import org.jboss.resteasy.test.core.spi.resource.ResourceClassProcessorPureEndPointEJB;
+import org.jboss.resteasy.utils.PortProviderUtil;
+import org.jboss.resteasy.utils.TestUtil;
+import org.jboss.shrinkwrap.api.Archive;
+import org.jboss.shrinkwrap.api.spec.WebArchive;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+/**
+ * @tpSubChapter ResourceClassProcessor SPI
+ * @tpChapter Integration tests
+ * @tpTestCaseDetails ResourceClassProcessor SPI basic test, see RESTEASY-1805
+ * @tpSince RESTEasy 3.6
+ */
+@ExtendWith(ArquillianExtension.class)
+@RunAsClient
+public class ResourceClassProcessorBasicTest {
+
+    static ResteasyClient client;
+
+    protected static final Logger logger = Logger.getLogger(ResourceClassProcessorBasicTest.class.getName());
+
+    // deployment names
+    private static final String WAR_EJB = "war_with_ejb";
+    private static final String WAR_CDI = "war_with_cdi";
+    private static final String WAR_NORMAL = "war_normal";
+
+    /**
+     * Deployment with EJB end-points
+     */
+    @Deployment(name = WAR_EJB)
+    public static Archive<?> deployEJB() {
+        return deploy(WAR_EJB, ResourceClassProcessorEndPointEJB.class, ResourceClassProcessorPureEndPointEJB.class);
+    }
+
+    /**
+     * Deployment with CDI end-points
+     */
+    @Deployment(name = WAR_CDI)
+    public static Archive<?> deployCDI() {
+        return deploy(WAR_CDI, ResourceClassProcessorEndPointCDI.class, ResourceClassProcessorPureEndPointCDI.class);
+    }
+
+    /**
+     * Deployment with non-CDI && non-EJB end-points
+     */
+    @Deployment(name = WAR_NORMAL)
+    public static Archive<?> deployNormla() {
+        return deploy(WAR_NORMAL, ResourceClassProcessorEndPoint.class, ResourceClassProcessorPureEndPoint.class);
+    }
+
+    public static Archive<?> deploy(String name, Class<?> basicEndPoint, Class<?> pureEndPoint) {
+        WebArchive war = TestUtil.prepareArchive(name);
+        war.addClass(ResourceClassProcessorClass.class);
+        war.addClass(ResourceClassProcessorMethod.class);
+        war.addClass(ResourceClassProcessorProxy.class);
+
+        return TestUtil.finishContainerPrepare(war, null,
+                basicEndPoint, pureEndPoint,
+                ResourceClassProcessorImplementation.class,
+                ResourceClassProcessorProxyEndPoint.class);
+    }
+
+    @BeforeAll
+    public static void init() {
+        client = (ResteasyClient) ClientBuilder.newClient();
+    }
+
+    @AfterAll
+    public static void after() {
+        client.close();
+    }
+
+    /**
+     * @tpTestDetails Test uses custom implementations of ResourceClassProcessor, ResourceClass and ResourceMethod
+     *                Custom ResourceClassProcessor and ResourceClass should be used for end-point class
+     *                Custom ResourceMethod should not affect tested end-point method, so end-point response should not be
+     *                affected
+     *                Deployment with non-CDI && non-EJB end-points is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void customClassDefaultMethodTest() {
+        customClassDefaultMethodTestHelper(WAR_NORMAL);
+    }
+
+    /**
+     * @tpTestDetails Same as customClassDefaultMethodTest(), but CDI end-point is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void customClassDefaultMethodCdiTest() {
+        customClassDefaultMethodTestHelper(WAR_CDI);
+    }
+
+    /**
+     * @tpTestDetails Same as customClassDefaultMethodTest(), but EJB end-point is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void customClassDefaultMethodEjbTest() {
+        customClassDefaultMethodTestHelper(WAR_EJB);
+    }
+
+    public void customClassDefaultMethodTestHelper(String warName) {
+        Response response = client.target(PortProviderUtil.generateURL("/patched/pure", warName)).request().get();
+        Assertions.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
+        Assertions.assertTrue(response.getMediaType().toString().contains("text/plain"));
+    }
+
+    /**
+     * @tpTestDetails Test uses custom implementations of ResourceClassProcessor, ResourceClass and ResourceMethod
+     *                These custom implementations should rewrite produce media type of tested end-point
+     *                Deployment with non-CDI && non-EJB end-points is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void customClassCustomMethodTest() {
+        customClassCustomMethodTestHelper(WAR_NORMAL);
+    }
+
+    /**
+     * @tpTestDetails Same as customClassCustomMethodTest(), but CDI end-point is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void customClassCustomMethodCdiTest() {
+        customClassCustomMethodTestHelper(WAR_CDI);
+    }
+
+    /**
+     * @tpTestDetails Same as customClassCustomMethodTest(), but EJB end-point is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void customClassCustomMethodEjbTest() {
+        customClassCustomMethodTestHelper(WAR_EJB);
+    }
+
+    public void customClassCustomMethodTestHelper(String warName) {
+        Response response = client.target(PortProviderUtil.generateURL("/patched/custom", warName)).request().get();
+        Assertions.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
+        Assertions.assertTrue(response.getMediaType().toString().contains("application/xml"));
+    }
+
+    /**
+     * @tpTestDetails Test uses custom implementations of ResourceClassProcessor, ResourceClass and ResourceMethod
+     *                These implementations should not affect tested end-point class and end-point method
+     *                End-point response should not be affected
+     *                Deployment with non-CDI && non-EJB end-points is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void defaultClassDefaultMethodTest() {
+        defaultClassDefaultMethodTestHelper(WAR_NORMAL);
+    }
+
+    /**
+     * @tpTestDetails Same as defaultClassDefaultMethodTest(), but CDI end-point is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void defaultClassDefaultMethodCdiTest() {
+        defaultClassDefaultMethodTestHelper(WAR_CDI);
+    }
+
+    /**
+     * @tpTestDetails Same as defaultClassDefaultMethodTest(), but EJB end-point is used
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void defaultClassDefaultMethodEjbTest() {
+        defaultClassDefaultMethodTestHelper(WAR_EJB);
+    }
+
+    public void defaultClassDefaultMethodTestHelper(String warName) {
+        Response response = client.target(PortProviderUtil.generateURL("/pure/pure", warName)).request().get();
+        Assertions.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
+        Assertions.assertTrue(response.getMediaType().toString().contains("text/plain"));
+    }
+
+    /**
+     * @tpTestDetails Client doesn't use proxy, but end-point class doesn't contain jax-rs annotations
+     *                Annotations are in interface, end-point implements this interface with jax-rs annotations
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    public void interfaceTest() {
+        Response response = client.target(PortProviderUtil.generateURL("/proxy", WAR_NORMAL)).request().get();
+        Assertions.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
+        Assertions.assertTrue(response.getMediaType().toString().contains("application/xml"));
+    }
+
+    /**
+     * @tpTestDetails Check ResourceClassProcessor support in client proxy
+     * @tpSince RESTEasy 3.6
+     */
+    @Test
+    @Disabled("https://issues.jboss.org/browse/RESTEASY-2071")
+    public void proxyTest() {
+        ResteasyClient proxyClient = (ResteasyClient) ClientBuilder.newBuilder()
+                .register(ResourceClassProcessorImplementation.class)
+                .build();
+
+        ResourceClassProcessorProxy proxy = proxyClient.target(PortProviderUtil.generateURL("/", WAR_NORMAL))
+                .proxy(ResourceClassProcessorProxy.class);
+        String response = proxy.custom();
+        logger.info(String.format("Proxy response: %s", response));
+        Assertions.assertEquals(response, "<a></a>", "Proxy returns wrong response");
+
+        proxyClient.close();
+    }
+}

@@ -1,0 +1,240 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- Use the jboss-parent as the parent. The org.jboss.resteasy:resteasy-jaxrs-all imports the
+         org.jboss.resteasy:resteasy-dependencies BOM which we do not want included in this BOM.
+    -->
+    <parent>
+        <groupId>org.jboss</groupId>
+        <artifactId>jboss-parent</artifactId>
+        <version>53</version>
+        <relativePath />
+    </parent>
+
+    <groupId>org.jboss.resteasy</groupId>
+    <artifactId>resteasy-bom</artifactId>
+    <version>8.0.0.Alpha1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>RESTEasy Maven Import (BOM)</name>
+    <description>A Bill of Materials (BOM) for RESTEasy dependencies</description>
+
+    <url>https://resteasy.dev</url>
+
+    <organization>
+        <name>RESTEasy Community</name>
+        <url>https://resteasy.dev</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>https://repository.jboss.org/licenses/apache-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>jamezp</id>
+            <name>James Perkins</name>
+            <email>jperkins@ibm.com</email>
+            <url>https://resteasy.dev</url>
+            <organization>IBM</organization>
+            <roles>
+                <role>project-lead</role>
+            </roles>
+            <timezone>-8</timezone>
+        </developer>
+    </developers>
+
+    <contributors>
+        <!-- Original author and founder of RESTEasy -->
+        <contributor>
+            <name>Bill Burke</name>
+            <organization>JBoss</organization>
+        </contributor>
+        <contributor>
+            <name>Ryan J. McDonough</name>
+        </contributor>
+        <contributor>
+            <name>Heiko Braun</name>
+        </contributor>
+        <contributor>
+            <name>Martin Algesten</name>
+        </contributor>
+    </contributors>
+
+    <scm>
+        <connection>scm:git:git://github.com/resteasy/resteasy.git</connection>
+        <developerConnection>scm:git:git@github.com:resteasy/resteasy.git</developerConnection>
+        <url>https://github.com/resteasy/resteasy</url>
+      <tag>HEAD</tag>
+  </scm>
+
+    <issueManagement>
+        <system>JIRA</system>
+        <url>https://issues.redhat.com/browse/RESTEASY</url>
+    </issueManagement>
+
+    <properties>
+        <jdk.min.version>17</jdk.min.version>
+        <!-- Compile to Java 17 -->
+        <maven.compiler.release>17</maven.compiler.release>
+
+        <!-- maven-release-plugin configuration -->
+        <autoVersionSubmodules>true</autoVersionSubmodules>
+        <preparationGoals>clean install javadoc:aggregate-no-fork site</preparationGoals>
+        <preparationProfiles>central-release</preparationProfiles>
+        <releaseProfiles>${preparationProfiles}</releaseProfiles>
+        <signTag>true</signTag>
+        <tagNameFormat>v@{project.version}</tagNameFormat>
+        <arguments>-DskipTests -DpushChanges=${pushChanges} -Dcentral.autoPublish=${central.autoPublish}</arguments>
+        <!-- Do not push changes by default when using the maven-release-plugin:prepare -->
+        <pushChanges>false</pushChanges>
+        <!-- Use the local directory when using perform -->
+        <localCheckout>true</localCheckout>
+        <!-- Maven Central properties -->
+        <central.deploymentName>resteasy-${project.version}</central.deploymentName>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>jose-jwt</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-atom-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-cdi</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-client</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-client-api</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-client-utils</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-core</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-core-spi</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-crypto</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-fastinfoset-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-html</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-jackson2-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-jaxb-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-jsapi</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-json-binding-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-json-p-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-links</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-multipart-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-reactor</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-rxjava2</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-servlet-initializer</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-stats</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-undertow</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-undertow-cdi</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-validator-provider</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-wadl</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.resteasy</groupId>
+                <artifactId>resteasy-wadl-undertow-connector</artifactId>
+                <version>8.0.0.Alpha1-SNAPSHOT</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

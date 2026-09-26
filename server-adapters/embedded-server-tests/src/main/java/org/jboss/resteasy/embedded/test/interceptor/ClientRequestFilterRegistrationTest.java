@@ -1,0 +1,42 @@
+/*
+ * Copyright The RESTEasy Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.jboss.resteasy.embedded.test.interceptor;
+
+import java.net.URI;
+
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.core.Response;
+
+import org.jboss.resteasy.embedded.test.interceptor.resource.ClientRequestFilterImpl;
+import org.jboss.resteasy.embedded.test.interceptor.resource.ClientResource;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import dev.resteasy.junit.extension.annotations.RequestPath;
+import dev.resteasy.junit.extension.annotations.RestBootstrap;
+import dev.resteasy.junit.extension.annotations.RestResource;
+
+/**
+ * @tpSubChapter
+ * @tpChapter Embedded Containers
+ * @tpTestCaseDetails Tests @Provider annotation on ClientRequestFilter
+ * @tpSince RESTEasy 4.1.0
+ */
+@RestBootstrap({ ClientResource.class, ClientRequestFilterImpl.class })
+public class ClientRequestFilterRegistrationTest {
+
+    @RestResource
+    private Client client;
+
+    @Test
+    public void filterRegisteredTest(@RestResource @RequestPath("/testIt") final URI uri) throws Exception {
+        WebTarget base = client.target(uri);
+        Response response = base.request().get();
+        Assertions.assertEquals(456, response.getStatus());
+    }
+
+}

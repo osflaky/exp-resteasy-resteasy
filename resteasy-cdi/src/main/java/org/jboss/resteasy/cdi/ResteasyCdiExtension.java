@@ -1,0 +1,435 @@
+/*
+ * Copyright The RESTEasy Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.jboss.resteasy.cdi;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+import jakarta.decorator.Decorator;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.literal.InjectLiteral;
+import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
+import jakarta.enterprise.inject.spi.AfterTypeDiscovery;
+import jakarta.enterprise.inject.spi.AnnotatedType;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.BeforeBeanDiscovery;
+import jakarta.enterprise.inject.spi.Extension;
+import jakarta.enterprise.inject.spi.InjectionTarget;
+import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
+import jakarta.enterprise.inject.spi.ProcessBean;
+import jakarta.enterprise.inject.spi.ProcessInjectionTarget;
+import jakarta.enterprise.inject.spi.ProcessSessionBean;
+import jakarta.enterprise.inject.spi.WithAnnotations;
+import jakarta.enterprise.util.AnnotationLiteral;
+import jakarta.inject.Inject;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.core.Application;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.ext.Provider;
+
+import org.jboss.resteasy.cdi.i18n.LogMessages;
+import org.jboss.resteasy.cdi.i18n.Messages;
+import org.jboss.resteasy.core.ResteasyContext;
+import org.jboss.resteasy.plugins.providers.RegisterBuiltin;
+
+/**
+ * A CDI {@link Extension} that integrates Jakarta REST components with CDI. This extension:
+ * <ul>
+ * <li>Assigns default scopes to discovered Jakarta REST resources ({@link RequestScoped}), providers
+ * ({@link ApplicationScoped}), and {@link Application} subclasses ({@link ApplicationScoped})</li>
+ * <li>Adds {@link jakarta.inject.Inject @Inject} to {@link jakarta.ws.rs.core.Context @Context}-annotated fields,
+ * setter methods, and constructors so that CDI can inject context values via {@link ContextProducers}</li>
+ * <li>Wraps {@link InjectionTarget} instances for Jakarta REST components within {@link JaxrsInjectionTarget}
+ * to handle property injection and validation</li>
+ * <li>Builds the session bean interface map used by {@link CdiInjectorFactory} for EJB lookup</li>
+ * <li>Tracks CDI-managed Jakarta REST components in the {@link ResteasyBeanContainer}</li>
+ * </ul>
+ *
+ * @author Jozef Hartinger
+ * @author <a href="mailto:jperkins@ibm.com">James R. Perkins</a>
+ */
+public class ResteasyCdiExtension implements Extension {
+    private static boolean active;
+    private static final String JAKARTA_EJB_STATEFUL = "jakarta.ejb.Stateful";
+    private static final String JAKARTA_EJB_STATELESS = "jakarta.ejb.Stateless";
+    private static final String JAKARTA_EJB_SINGLETON = "jakarta.ejb.Singleton";
+
+    // Scope literals
+    private static final Annotation requestScopedLiteral = new AnnotationLiteral<RequestScoped>() {
+        private static final long serialVersionUID = 3381824686081435817L;
+    };
+    private static final Annotation applicationScopedLiteral = new AnnotationLiteral<ApplicationScoped>() {
+        private static final long serialVersionUID = -8211157243671012820L;
+    };
+
+    public static boolean isCDIActive() {
+        return active;
+    }
+
+    private final Map<Class<?>, Type> sessionBeanInterface = new HashMap<>();
+    private final Set<Class<?>> beanContainer = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final boolean enhancedCdiSupportEnabled;
+    private boolean generateClientBean = true;
+    private boolean addContextProducers = true;
+    private boolean noApplicationFound = true;
+    private volatile ResteasyBeanContainer resteasyBeanContainer;
+
+    public ResteasyCdiExtension() {
+        enhancedCdiSupportEnabled = CdiOptions.ENHANCED_CDI_SUPPORT.getValue();
+    }
+
+    /**
+     * Obtain BeanManager reference for future use.
+     *
+     * @param event event
+     */
+    public void observeBeforeBeanDiscovery(@Observes BeforeBeanDiscovery event) {
+        active = true;
+    }
+
+    /**
+     * Process any client beans.
+     *
+     * @param pb the bean being processed
+     */
+    public void processClientBean(@Observes final ProcessBean<?> pb) {
+        // this method will get notified if there is any bean of type `Client` created
+        if (pb.getBean().getTypes().contains(Client.class)) {
+            final Set<Annotation> qualifiers = pb.getBean()
+                    .getQualifiers(); // you want to detect beans with no explicit qualifiers
+            if (qualifiers.contains(Any.Literal.INSTANCE) && qualifiers.contains(Default.Literal.INSTANCE)) {
+                generateClientBean = false;
+            }
+        }
+    }
+
+    /**
+     * Registers producers for required injections types and for a {@link Client REST client}.
+     *
+     * @param event the after bean discovery event
+     */
+    public void registerBeans(@Observes final AfterBeanDiscovery event) {
+        if (generateClientBean) {
+            event.addBean().addTransitiveTypeClosure(Client.class)
+                    .scope(ApplicationScoped.class)
+                    .produceWith(instance -> ClientBuilder
+                            .newClient(RegisterBuiltin.getClientInitializedResteasyProviderFactory(getClassLoader())))
+                    .disposeWith((client, instance) -> client.close());
+        }
+        final Set<Class<?>> resources = Set.copyOf(beanContainer);
+        beanContainer.clear();
+        resteasyBeanContainer = resources::contains;
+    }
+
+    /**
+     * Registers producers for the Jakarta Servlet types which are required to be injectable, if no other bean already
+     * provides them.
+     *
+     * @param event       the after bean discovery event
+     * @param beanManager the bean manager
+     */
+    public void registerContextProducers(@Observes final AfterBeanDiscovery event, final BeanManager beanManager) {
+
+        // Register producers, if they don't exist, for known servlet types
+        registerContextProducer(event, beanManager, HttpServletRequest.class);
+        registerContextProducer(event, beanManager, HttpServletResponse.class);
+        registerContextProducer(event, beanManager, ServletContext.class);
+        registerContextProducer(event, beanManager, ServletConfig.class);
+    }
+
+    /**
+     * A simple observer to indicate the {@link ContextProducers} should not be dynamically registered.
+     *
+     * @param event the event
+     */
+    public void observeContextProducer(@Observes ProcessAnnotatedType<ContextProducers> event) {
+        addContextProducers = false;
+    }
+
+    /**
+     * If the {@link ContextProducers} were not discovered, we need to add the type for the producers.
+     *
+     * @param event       the event
+     * @param beanManager the bean manager
+     */
+    public void addContextProducer(@Observes final AfterTypeDiscovery event, final BeanManager beanManager) {
+        if (addContextProducers) {
+            final AnnotatedType<ContextProducers> producersAnnotatedType = beanManager
+                    .createAnnotatedType(ContextProducers.class);
+            event.addAnnotatedType(producersAnnotatedType, ContextProducers.class.getCanonicalName());
+        }
+        if (noApplicationFound) {
+            // Add a generic Application if no application was defined
+            final AnnotatedType<Application> annotatedType = beanManager.createAnnotatedType(Application.class);
+            event.addAnnotatedType(annotatedType, Application.class.getCanonicalName());
+        }
+    }
+
+    /**
+     * Set a default scope for each CDI bean which is a JAX-RS Resource.
+     *
+     * @param <T>         type
+     * @param event       event
+     * @param beanManager bean manager
+     */
+    public <T> void observeResources(@WithAnnotations({ Path.class }) @Observes ProcessAnnotatedType<T> event,
+            BeanManager beanManager) {
+        AnnotatedType<T> annotatedType = event.getAnnotatedType();
+
+        // If we're not an interface or decorator, add @Inject to any @Context injection points
+        if (enhancedCdiSupportEnabled && !annotatedType.getJavaClass().isInterface()
+                && !annotatedType.isAnnotationPresent(Decorator.class)
+                && !Utils.isUnproxyableClass(annotatedType.getJavaClass())) {
+            addInject(event);
+        }
+
+        // Check if this is a stateful bean and consider it not managed by the CDI container. This means we will not add
+        // it to the bean container.
+        final boolean isStatefulBean = isStatefulBean(annotatedType);
+
+        if (!annotatedType.getJavaClass().isInterface()
+                && !isSessionBean(annotatedType)
+                && !annotatedType.isAnnotationPresent(Decorator.class)) {
+            if (!Utils.isScopeDefined(annotatedType, beanManager)) {
+                LogMessages.LOGGER.debug(Messages.MESSAGES.discoveredCDIBeanJaxRsResource(annotatedType.getJavaClass()
+                        .getCanonicalName()));
+                event.configureAnnotatedType().add(requestScopedLiteral);
+                if (!isStatefulBean && !Utils.isUnproxyableClass(annotatedType.getJavaClass())) {
+                    beanContainer.add(annotatedType.getJavaClass());
+                }
+            } else if (!isStatefulBean && Utils.isNormalScope(annotatedType, beanManager)
+                    && !Utils.isUnproxyableClass(annotatedType.getJavaClass())) {
+                beanContainer.add(annotatedType.getJavaClass());
+            }
+        }
+    }
+
+    /**
+     * Set a default scope for each CDI bean which is a JAX-RS Provider.
+     *
+     * @param <T>         type
+     * @param event       event
+     * @param beanManager bean manager
+     */
+    public <T> void observeProviders(@WithAnnotations({ Provider.class }) @Observes ProcessAnnotatedType<T> event,
+            BeanManager beanManager) {
+        AnnotatedType<T> annotatedType = event.getAnnotatedType();
+
+        // If we're not an interface or decorator, add @Inject to any @Context injection points
+        if (enhancedCdiSupportEnabled && !annotatedType.getJavaClass().isInterface()
+                && !annotatedType.isAnnotationPresent(Decorator.class)
+                && !Utils.isUnproxyableClass(annotatedType.getJavaClass())) {
+            addInject(event);
+        }
+
+        // Check if this is a stateful bean and consider it not managed by the CDI container. This means we will not add
+        // it to the bean container.
+        final boolean isStatefulBean = isStatefulBean(annotatedType);
+
+        if (!annotatedType.getJavaClass().isInterface()
+                && !isSessionBean(annotatedType)
+                && !Utils.isUnproxyableClass(annotatedType.getJavaClass())) {
+            if (!Utils.isScopeDefined(annotatedType, beanManager)) {
+                LogMessages.LOGGER.debug(Messages.MESSAGES.discoveredCDIBeanJaxRsProvider(annotatedType.getJavaClass()
+                        .getCanonicalName()));
+                event.configureAnnotatedType().add(applicationScopedLiteral);
+                if (!isStatefulBean) {
+                    beanContainer.add(annotatedType.getJavaClass());
+                }
+            } else if (!isStatefulBean && Utils.isNormalScope(annotatedType, beanManager)) {
+                beanContainer.add(annotatedType.getJavaClass());
+            }
+        }
+    }
+
+    /**
+     * Set a default scope for each CDI bean which is a JAX-RS Application subclass.
+     *
+     * @param <T>         type
+     * @param event       event
+     * @param beanManager bean manager
+     */
+    public <T extends Application> void observeApplications(@Observes ProcessAnnotatedType<T> event,
+            BeanManager beanManager) {
+        final Class<T> applicationClass = event.getAnnotatedType().getJavaClass();
+        final AnnotatedType<T> annotatedType = event.getAnnotatedType();
+
+        // Check if this is a stateful bean and consider it not managed by the CDI container. This means we will not add
+        // it to the bean container.
+        final boolean isStatefulBean = isStatefulBean(annotatedType);
+
+        if (!Modifier.isAbstract(applicationClass.getModifiers())) {
+            noApplicationFound = false;
+            // If we're not an interface or decorator, add @Inject to any @Context injection points
+            if (enhancedCdiSupportEnabled && !annotatedType.getJavaClass().isInterface()
+                    && !annotatedType.isAnnotationPresent(Decorator.class)
+                    && !Utils.isUnproxyableClass(annotatedType.getJavaClass())) {
+                addInject(event);
+            }
+            if (!Utils.isScopeDefined(annotatedType, beanManager)) {
+                event.configureAnnotatedType().add(applicationScopedLiteral);
+                if (!isStatefulBean && !Utils.isUnproxyableClass(applicationClass)) {
+                    beanContainer.add(applicationClass);
+                }
+            } else if (!isStatefulBean && Utils.isNormalScope(annotatedType, beanManager)
+                    && !Utils.isUnproxyableClass(applicationClass)) {
+                beanContainer.add(applicationClass);
+            }
+        }
+    }
+
+    /**
+     * Wrap InjectionTarget of JAX-RS components within JaxrsInjectionTarget
+     * which takes care of JAX-RS property injection.
+     *
+     * @param <T>   type
+     * @param event event
+     */
+    public <T> void observeInjectionTarget(@Observes ProcessInjectionTarget<T> event) {
+        if (Utils.isJaxrsComponent(event.getAnnotatedType().getJavaClass())) {
+            event.setInjectionTarget(wrapInjectionTarget(event));
+        }
+    }
+
+    @SuppressWarnings("removal")
+    protected <T> InjectionTarget<T> wrapInjectionTarget(ProcessInjectionTarget<T> event) {
+        final Class<T> injectionType = event.getAnnotatedType().getJavaClass();
+        return new JaxrsInjectionTarget<>(event.getInjectionTarget(), injectionType,
+                !enhancedCdiSupportEnabled || !beanContainer.contains(injectionType));
+    }
+
+    /**
+     * Observes ProcessSessionBean events and creates a (Bean class {@literal ->} Local
+     * interface) map for Session beans with local interfaces. This map is
+     * necessary since RESTEasy identifies a bean class as JAX-RS components
+     * while CDI requires a local interface to be used for lookup.
+     *
+     * @param <T>   type
+     * @param event event
+     */
+    public <T> void observeSessionBeans(@Observes ProcessSessionBean<T> event) {
+        Bean<Object> sessionBean = event.getBean();
+
+        if (Utils.isJaxrsComponent(sessionBean.getBeanClass())) {
+            addSessionBeanInterface(sessionBean);
+        }
+    }
+
+    private void addSessionBeanInterface(Bean<?> bean) {
+        for (Type type : bean.getTypes()) {
+            if ((type instanceof Class<?>) && ((Class<?>) type).isInterface()) {
+                Class<?> clazz = (Class<?>) type;
+                final Class<?> beanClass = bean.getBeanClass();
+                if (Utils.isJaxrsAnnotatedClass(beanClass) || Utils.hasEndpointMethod(clazz)) {
+                    sessionBeanInterface.put(bean.getBeanClass(), type);
+                    LogMessages.LOGGER.debug(Messages.MESSAGES.typeWillBeUsedForLookup(type, beanClass));
+                    return;
+                }
+            }
+        }
+        LogMessages.LOGGER.debug(Messages.MESSAGES.noLookupInterface(bean.getBeanClass()));
+    }
+
+    public Map<Class<?>, Type> getSessionBeanInterface() {
+        return sessionBeanInterface;
+    }
+
+    ResteasyBeanContainer beanContainer() {
+        return resteasyBeanContainer;
+    }
+
+    private boolean isSessionBean(AnnotatedType<?> annotatedType) {
+        for (Annotation annotation : annotatedType.getAnnotations()) {
+            Class<?> annotationType = annotation.annotationType();
+            if (annotationType.getName().equals(JAKARTA_EJB_STATELESS)
+                    || annotationType.getName().equals(JAKARTA_EJB_SINGLETON)) {
+                LogMessages.LOGGER.debug(Messages.MESSAGES.beanIsSLSBOrSingleton(annotatedType.getJavaClass()));
+                return true; // Do not modify scopes of SLSBs and Singletons
+            }
+        }
+        return false;
+    }
+
+    private boolean isStatefulBean(final AnnotatedType<?> annotatedType) {
+        for (Annotation annotation : annotatedType.getAnnotations()) {
+            Class<?> annotationType = annotation.annotationType();
+            if (annotationType.getName().equals(JAKARTA_EJB_STATEFUL)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Adds {@link Inject @Inject} to {@link Context @Context}-annotated injection points so that CDI can inject
+     * context values via {@link ContextProducers}. This covers:
+     * <ul>
+     * <li>Fields annotated with {@code @Context}</li>
+     * <li>Setter methods annotated with {@code @Context}</li>
+     * <li>Constructors with any parameter annotated with {@code @Context} (unless the constructor is already
+     * annotated with {@code @Inject})</li>
+     * </ul>
+     *
+     * @param pat the annotated type being processed
+     */
+    private void addInject(final ProcessAnnotatedType<?> pat) {
+        // Add @Inject to fields
+        pat.configureAnnotatedType()
+                .filterFields(f -> !f.isAnnotationPresent(Inject.class) && f.isAnnotationPresent(Context.class))
+                .forEach(f -> f.add(InjectLiteral.INSTANCE));
+        // Add @Inject to methods
+        pat.configureAnnotatedType()
+                .filterMethods(m -> !m.isAnnotationPresent(Inject.class) && m.isAnnotationPresent(Context.class))
+                .forEach(m -> m.add(InjectLiteral.INSTANCE));
+        // Add @Inject to constructors
+        pat.configureAnnotatedType()
+                .filterConstructors(c -> !c.isAnnotationPresent(Inject.class)
+                        && c.getParameters().stream().anyMatch(p -> p.isAnnotationPresent(Context.class)))
+                .forEach(c -> c.add(InjectLiteral.INSTANCE));
+    }
+
+    private static void registerContextProducer(final AfterBeanDiscovery event, final BeanManager beanManager,
+            final Class<?> beanType) {
+        if (beanManager.getBeans(beanType).isEmpty()) {
+            registerContextProducer(event, beanType);
+        }
+    }
+
+    private static void registerContextProducer(final AfterBeanDiscovery event, final Class<?> beanType) {
+        // Only the required type is added. Adding the transitive type closure would resolve super types, e.g.
+        // ServletRequest, which are neither required to be injectable nor checked for an existing bean.
+        event.addBean().addType(beanType)
+                .addQualifier(Any.Literal.INSTANCE)
+                .addQualifier(Default.Literal.INSTANCE)
+                .scope(RequestScoped.class)
+                .produceWith(instance -> ResteasyContext.getRequiredContextData(beanType));
+    }
+
+    private static ClassLoader getClassLoader() {
+        ClassLoader result = Thread.currentThread().getContextClassLoader();
+        if (result == null) {
+            result = ResteasyCdiExtension.class.getClassLoader();
+        }
+        return result;
+    }
+}
